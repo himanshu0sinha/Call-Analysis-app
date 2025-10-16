@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, unlink } from "fs/promises";
-import { join } from "path";
 import Groq from "groq-sdk";
-import { createReadStream } from "fs";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "",
@@ -39,26 +36,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save uploaded file temporarily
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const filename = `temp_${Date.now()}_${file.name}`;
-    const filepath = join(process.cwd(), "uploads", filename);
-    
-    // Create uploads directory if it doesn't exist
-    try {
-      await writeFile(join(process.cwd(), "uploads", ".gitkeep"), "");
-    } catch {
-      // Directory might already exist
-    }
-
-    await writeFile(filepath, buffer);
-
     try {
       // Step 1: Transcribe audio using Groq Whisper
-      const audioStream = createReadStream(filepath);
       const transcription = await groq.audio.transcriptions.create({
-        file: audioStream,
+        file: file,
         model: "whisper-large-v3",
       });
 
@@ -139,18 +120,9 @@ ${Object.entries(EVALUATION_PARAMETERS).map(([key, param]) => {
         throw new Error("Failed to parse analysis result");
       }
 
-      // Clean up temporary file
-      await unlink(filepath);
-
       return NextResponse.json(parsedResult);
 
     } catch (error) {
-      // Clean up temporary file on error
-      try {
-        await unlink(filepath);
-      } catch (cleanupError) {
-        console.error("Failed to cleanup temporary file:", cleanupError);
-      }
       throw error;
     }
 
